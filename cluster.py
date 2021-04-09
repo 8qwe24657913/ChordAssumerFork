@@ -59,7 +59,7 @@ def cluster(music: pd.DataFrame, can_merge: Callable[[Part, Part, int, pd.DataFr
     should_new = True
     for i, note in music.iterrows():
         # 段落不能跨休止符连接
-        if note['step_id'] == -1:
+        if int(str(note['step_id'])) == -1:
             should_new = True
         else:
             if should_new:
