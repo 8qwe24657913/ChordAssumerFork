@@ -97,10 +97,7 @@ class Note(object):
     def __repr__(self):
         return f'Note({self.step_id}, {self.start_time}, {self.duration})'
 
-def get_notes(mu_id, mysql):
-    """
-    从数据库中获取一首音乐的所有音符
-    """
+def get_music(mu_id, mysql):
     assert type(mu_id) is int
     mu_id = str(mu_id)
     mu_id = '0' * (MU_ID_LEN - len(mu_id)) + mu_id
@@ -112,7 +109,13 @@ def get_notes(mu_id, mysql):
                 and n.stave_id=1
                 and m.part_id='P1'
                 order by start_time asc"""
-    music = pd.read_sql(sql, mysql)
+    return pd.read_sql(sql, mysql)
+
+def get_notes(mu_id, mysql):
+    """
+    从数据库中获取一首音乐的所有音符
+    """
+    music = get_music(mu_id, mysql)
     measure_parts = music.groupby('measure_id')
     music['start_time'] -= measure_parts['start_time'].transform('min')
     music['start_time'] //= ATOMIC_TIME
