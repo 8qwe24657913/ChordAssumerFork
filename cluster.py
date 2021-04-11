@@ -1,51 +1,53 @@
+from dataclasses import dataclass
+from itertools import chain
 from typing import Callable
 
 import pandas as pd
-import pymysql
 
-from chord import get_music
 from config import *
+from utils import get_connection, get_music
 
 
+@dataclass(eq=False, frozen=True)
 class Part(object):
     """
     一段音乐
+
+    start_idx: 第一个音符的下标
+    length: 该段的长度
+    first: 第一个音符的开始时间
+    last: 最后一个音符的开始时间
     """
-    def __init__(self, start_idx: int, length: int, first: int, last: int) -> None:
-        """
-        start_idx: 第一个音符的下标
-        length: 该段的长度
-        first: 第一个音符的开始时间
-        last: 最后一个音符的开始时间
-        """
-        super().__init__()
-        self.start_idx = start_idx
-        self.length = length
-        self.first = first
-        self.last = last
+
+    start_idx: int
+    length: int
+    first: int
+    last: int
+
     def __len__(self) -> int:
         """
         音乐长度，以音符个数计
         """
         return self.length
+
     def __sub__(self, other: 'Part'):
         """
-        两段音乐的距离，以时间计，1 为 1/16 音符时间
+        两段音乐的距离，以时间计，1 为 1/BEAT_LCM 音符时间
         """
-        if self.first > other.last:
+        if self.first >= other.last:
             return self.first - other.last
-        elif self.last < other.first:
+        elif self.last <= other.first:
             return self.last - other.first
         else:
             raise Exception('part overlapped')
+
     def __add__(self, other: 'Part') -> 'Part':
         """
         合并两段音乐
         """
-        assert self.start_idx + len(self) == other.start_idx, 'only consequent parts can be added'
+        assert self.start_idx + \
+            len(self) == other.start_idx, 'only sequential parts can be added'
         return Part(self.start_idx, self.length + other.length, self.first, other.last)
-    def __repr__(self):
-        return f'Part({self.start_idx}, {self.length}, {self.first}, {self.last})'
 
 
 def cluster(music: pd.DataFrame, can_merge: Callable[[Part, Part, int, pd.DataFrame], bool]):
@@ -57,19 +59,20 @@ def cluster(music: pd.DataFrame, can_merge: Callable[[Part, Part, int, pd.DataFr
     # 构造音乐段落
     data = []
     should_new = True
-    for i, note in music.iterrows():
+    for i, (_, note) in enumerate(music.iterrows()):
+        music.index
         # 段落不能跨休止符连接
-        if int(str(note['step_id'])) == -1:
+        if note['step_id'] == -1:
             should_new = True
         else:
             if should_new:
                 should_new = False
                 data.append([])
-            time = int(str(note['start_time'])) // ATOMIC_TIME
-            data[-1].append(Part(int(str(i)), 1, time, time))
+            time = int(note['start_time'])  # type: ignore
+            data[-1].append(Part(i, 1, time, time))
     # 聚类
-    distance = 1 # 1/16 音符时间
-    while distance <= 16: # 最多间隔一个全音符时间（后续可能修改）
+    distance = 1  # 1/BEAT_LCM 音符时间
+    while distance <= BEAT_LCM:  # 最多间隔一个全音符时间（后续可能修改）
         new_data = []
         for parts in data:
             new_parts = []
@@ -81,11 +84,20 @@ def cluster(music: pd.DataFrame, can_merge: Callable[[Part, Part, int, pd.DataFr
             new_data.append(new_parts)
         data = new_data
         distance *= 2
-    return data
-    
+    return list(chain(*data))
 
 
 if __name__ == '__main__':
-    mysql = pymysql.connect(**DATABASE_CONFIG)
-    music = get_music(16, mysql)
-    print(cluster(music, lambda a, b, distance, music: True))
+    with get_connection() as mysql:
+        music = get_music(16, mysql)
+
+    def can_merge(part1: Part, part2: Part, distance: int, music: pd.DataFrame) -> bool:
+        if distance <= BEAT_LCM // 16:  # 距离小于等于 1/16 音符直接合并
+            return True
+        if part2.last - part1.first >= BEAT_LCM * 2:  # 和弦不会长于 2 小节
+            return False
+        # 演示一下如何获取到具体的音符信息
+        # print(music.iloc[[*range(part1.start_idx, part1.start_idx + part1.length)]])
+        return True
+    merged_parts = cluster(music, can_merge)
+    print(pd.DataFrame(merged_parts))

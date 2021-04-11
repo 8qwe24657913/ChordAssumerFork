@@ -1,4 +1,4 @@
-from db_config import DATABASE_CONFIG
+from utils import combine_weight
 
 # 各种和弦
 CHORDS = {
@@ -19,28 +19,37 @@ CHORDS = {
 }
 
 # 所有 beat_type 的最小公倍数
-BEAT_LCM = 32
+BEAT_LCM = 32  # 32 分音符
+
+_WEIGHT_1 = [1.0]
+_WEIGHT_2 = [0.6, 0.4]
+_WEIGHT_3 = [0.45, 0.3, 0.25]
+_WEIGHT_4 = [0.4, 0.2, 0.3, 0.1]
+_WEIGHT_6 = combine_weight(_WEIGHT_2, _WEIGHT_3)
+_WEIGHT_8 = combine_weight(_WEIGHT_4, _WEIGHT_2)
 
 # 每个 beat_type 分音符的权重
 WEIGHT = {
-    '1/4': [1.0],
-    '4/4': [0.4, 0.2, 0.3, 0.1],
-    '3/4': [0.45, 0.3, 0.25],
-    '2/4': [0.6, 0.4],
-    '3/8': [0.45,0.3,0.25],
-    '6/8': [0.6*0.45, 0.6*0.3, 0.6*0.25, 0.4*0.45, 0.4*0.3, 0.4*0.25],
-
+    '1/4': _WEIGHT_1,
+    '4/4': _WEIGHT_4,
+    '3/4': _WEIGHT_3,
+    '2/4': _WEIGHT_2,
+    '3/8': _WEIGHT_3,
+    '6/8': _WEIGHT_6,
 }
 
 # 将 beat_type 分音符拆分为 BEAT_LCM 分音符时如何赋予权重
 # 要求 beat_type * 数组长度 == BEAT_LCM
 WEIGHT_B_INNER = {
-    4: [0.4*0.6, 0.4*0.4, 0.2*0.6, 0.2*0.4, 0.3*0.6, 0.3*0.4, 0.1*0.6, 0.1*0.4],#[0.4,0.2,0.3,0.1]
-    8: [0.4, 0.2, 0.3, 0.1]#[0.6, 0.4],
+    4: _WEIGHT_8,
+    8: _WEIGHT_4,
 }
 
+# 全音符时长
+FULL_NOTE_TIME = 26880
+
 # BEAT_LCM 分音符的时长
-ATOMIC_TIME = 840# 32分音符长度
+ATOMIC_TIME = FULL_NOTE_TIME // BEAT_LCM
 
 # mu_id 的字符串长度（为什么要用 varchar 存 mu_id ？？？）
 MU_ID_LEN = 6
