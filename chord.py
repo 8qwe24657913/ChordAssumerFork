@@ -1,6 +1,6 @@
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List
+from typing import Dict, List, Set
 
 import pandas as pd
 
@@ -25,12 +25,12 @@ class Chord(object):
     """
     表示一种和弦
     """
-    deduplicate_set = set()
-    chords = {}
+    deduplicate_set: Set[str] = set()
+    chords: Dict[str, 'Chord'] = {}
 
     def __init__(self, name: str, order: List[int]) -> None:
         self.name = name
-        self.trans = []
+        self.trans: List[Transposition] = []
         order = Chord.normalize_order(order)
         # 自动生成其转位
         for idx in range(len(order)):
@@ -76,7 +76,7 @@ class Measure(object):
     """
     表示一种小节
     """
-    measures = {}
+    measures: Dict[str, 'Measure'] = {}
 
     def __init__(self, beats: int, beat_type: int, weight: List[float]) -> None:
         self.name = f'{beats}/{beat_type}'
@@ -154,12 +154,12 @@ def get_weight(measure_part: MeasurePart) -> NoteWeightDict:
     计算音符的权重
     """
     measure_weight = measure_part.measure.weight
-    used_weight = [[] for _ in measure_weight]
+    used_weight: List[List[int]] = [[] for _ in measure_weight]
     for note in measure_part.notes:
         if note.step_id != -1:
             for i in range(note.start_time, note.start_time + note.duration):
                 used_weight[i].append(note.step_id)
-    note_weight = defaultdict(float)
+    note_weight: Dict[int, float] = defaultdict(float)
     for weight, used in zip(measure_weight, used_weight):
         if used:
             weight_piece = weight / len(used)
@@ -174,9 +174,9 @@ def sort_chord_transpositions(note_weight: NoteWeightDict) -> List[Assumption]:
     """
     min_step = min(note_weight.keys())
     max_step = max(note_weight.keys())
-    result = []
+    result: List[Assumption] = []
     for chord in Chord.chords.values():
-        to_be_merged = {}
+        to_be_merged: Dict[str, Assumption] = {}
         for trans in chord.trans:
             for offset in range(min_step - trans.order[-1], max_step + 1):
                 weight = 0.0

@@ -1,7 +1,10 @@
 from functools import reduce
 from itertools import product
 from operator import mul
-from typing import List, Union
+from typing import List, Optional, Union
+
+import pandas as pd
+from pymysql.connections import Connection
 
 
 def combine_weight(*weights: List[float]) -> List[float]:
@@ -10,29 +13,31 @@ def combine_weight(*weights: List[float]) -> List[float]:
     """
     return [reduce(mul, weight) for weight in product(*weights)]
 
+
 class get_connection(object):
+    """
+    连接数据库的封装，强制使用 with 语句获取 connection 对象
+    """
+
     def __init__(self) -> None:
         super().__init__()
-        self._connection = None
-    
-    def __enter__(self):
-        import pymysql
+        self._connection: Optional[Connection] = None
 
+    def __enter__(self) -> Connection:
         from db_config import DATABASE_CONFIG
 
-        self._connection = pymysql.connect(**DATABASE_CONFIG)
+        self._connection = Connection(**DATABASE_CONFIG)
         return self._connection
-    
+
     def __exit__(self, type, value, trace) -> None:
         self._connection.close()
         self._connection = None
 
 
-def get_music(mu_id: Union[int, str], conn):
+def get_music(mu_id: Union[int, str], conn: Connection) -> pd.DataFrame:
     """
     从数据库中获取一首音乐
     """
-    import pandas as pd
 
     from config import ATOMIC_TIME, MU_ID_LEN
 

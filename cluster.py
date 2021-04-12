@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from itertools import chain
-from typing import Callable
+from typing import Callable, List
 
 import pandas as pd
 
@@ -50,14 +50,14 @@ class Part(object):
         return Part(self.start_idx, self.length + other.length, self.first, other.last)
 
 
-def cluster(music: pd.DataFrame, can_merge: Callable[[Part, Part, int, pd.DataFrame], bool]):
+def cluster(music: pd.DataFrame, can_merge: Callable[[Part, Part, int, pd.DataFrame], bool]) -> List[Part]:
     """
     音乐聚类
     music: 音乐
     can_merge: 判断两段音乐是否能够合并的函数，其传入参数为：段落1, 段落2, 该合并阶段所允许的距离，整首音乐的信息
     """
     # 构造音乐段落
-    data = []
+    data: List[List[Part]] = []
     should_new = True
     for i, (_, note) in enumerate(music.iterrows()):
         music.index
@@ -73,9 +73,9 @@ def cluster(music: pd.DataFrame, can_merge: Callable[[Part, Part, int, pd.DataFr
     # 聚类
     distance = 1  # 1/BEAT_LCM 音符时间
     while distance <= BEAT_LCM:  # 最多间隔一个全音符时间（后续可能修改）
-        new_data = []
+        new_data: List[List[Part]] = []
         for parts in data:
-            new_parts = []
+            new_parts: List[Part] = []
             for part in parts:
                 if new_parts and (part - new_parts[-1] <= distance) and can_merge(new_parts[-1], part, distance, music):
                     new_parts[-1] += part
@@ -83,7 +83,7 @@ def cluster(music: pd.DataFrame, can_merge: Callable[[Part, Part, int, pd.DataFr
                     new_parts.append(part)
             new_data.append(new_parts)
         data = new_data
-        distance *= 2
+        distance *= 2 # 每次迭代允许的距离翻倍
     return list(chain(*data))
 
 
