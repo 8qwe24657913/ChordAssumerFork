@@ -53,3 +53,16 @@ ATOMIC_TIME = FULL_NOTE_TIME // BEAT_LCM
 
 # mu_id 的字符串长度（为什么要用 varchar 存 mu_id ？？？）
 MU_ID_LEN = 6
+
+# 各音高的字符串表示
+STEPS = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
+
+# 允许聚类的距离
+TOLERANCE_CLUSTER_LENGTH = [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+
+assert BEAT_LCM % len(
+    TOLERANCE_CLUSTER_LENGTH) == 0, 'BEAT_LCM should divide len(TOLERANCE_CLUSTER_LENGTH)'
+
+# 每个聚类的长度
+CATEGORY_LEN = BEAT_LCM // len(TOLERANCE_CLUSTER_LENGTH)
+TOLERANCE_CLUSTER_LENGTH = [l * CATEGORY_LEN for l in TOLERANCE_CLUSTER_LENGTH]

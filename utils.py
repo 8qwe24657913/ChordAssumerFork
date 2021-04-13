@@ -1,9 +1,12 @@
+from contextlib import contextmanager
 from functools import reduce
-from itertools import product
+from itertools import chain, product
+from math import gcd
 from operator import mul
-from typing import List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import pandas as pd
+from pandas.io.formats.format import format_array
 from pymysql.connections import Connection
 
 
@@ -14,24 +17,14 @@ def combine_weight(*weights: List[float]) -> List[float]:
     return [reduce(mul, weight) for weight in product(*weights)]
 
 
-class get_connection(object):
-    """
-    连接数据库的封装，强制使用 with 语句获取 connection 对象
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self._connection: Optional[Connection] = None
-
-    def __enter__(self) -> Connection:
-        from db_config import DATABASE_CONFIG
-
-        self._connection = Connection(**DATABASE_CONFIG)
-        return self._connection
-
-    def __exit__(self, type, value, trace) -> None:
-        self._connection.close()
-        self._connection = None
+@contextmanager
+def get_connection():
+    from db_config import DATABASE_CONFIG
+    connection = Connection(**DATABASE_CONFIG)
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
 def get_music(mu_id: Union[int, str], conn: Connection) -> pd.DataFrame:
@@ -59,3 +52,37 @@ def get_music(mu_id: Union[int, str], conn: Connection) -> pd.DataFrame:
     music['beats'] = music['beats'].astype('int')
     music['beat_type'] = music['beat_type'].astype('int')
     return music
+
+
+def simplify_fraction(numerator: int, denominator: int) -> str:
+    """
+    化简分数
+    """
+    div = gcd(numerator, denominator)
+    numerator //= div
+    denominator //= div
+    return f'{numerator}/{denominator}'
+
+
+def format_note(step_id: int) -> str:
+    """
+    格式化音符
+    参考: 国际谱 https://bideyuanli.com/p/3673
+    """
+    if step_id == -1:
+        return 'R'
+    from config import STEPS
+    step = STEPS[(step_id - 1) % 12]
+    octave = (step_id - 1) // 12
+    return f'{step}{octave}'
+
+
+def pandas_format(format: Dict[str, Any]):
+    return pd.option_context(*chain(*format.items()))  # type: ignore
+
+
+def left_justified(df: pd.DataFrame, formatter: Optional[Callable] = None, **kwargs) -> pd.DataFrame:
+    result = pd.DataFrame()
+    for li in df.columns:
+        result[li] = format_array(df[li], formatter, justify='left', **kwargs)
+    return result
