@@ -58,11 +58,37 @@ MU_ID_LEN = 6
 STEPS = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
 
 # 允许聚类的距离
-TOLERANCE_CLUSTER_LENGTH = [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+# [16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 1]
+# [3 * 16, 2 * 16, 2 * 16, 1.5 * 16, 1.5 * 16, 1.5 * 16, 1.5 * 16, 1.5 * 16] + [1] * 9
+TOLERANCE_CLUSTER_LENGTH = [
+    3 * BEAT_LCM,  # 0
 
-assert BEAT_LCM % len(
-    TOLERANCE_CLUSTER_LENGTH) == 0, 'BEAT_LCM should divide len(TOLERANCE_CLUSTER_LENGTH)'
+    3 * BEAT_LCM,  # 1/32
+
+    2.5 * BEAT_LCM,  # 1/16
+
+    3 * BEAT_LCM,
+    3 * BEAT_LCM,  # 1/8
+
+    1.5 * BEAT_LCM,
+    1.5 * BEAT_LCM,
+    1.5 * BEAT_LCM,
+    1.5 * BEAT_LCM,  # 1/4
+
+    BEAT_LCM,
+    BEAT_LCM,
+    BEAT_LCM,
+    BEAT_LCM,
+    BEAT_LCM,
+    BEAT_LCM,
+    BEAT_LCM,
+    BEAT_LCM,  # 1/2
+]
+TOLERANCE_CLUSTER_LENGTH += [0] * (33 - len(TOLERANCE_CLUSTER_LENGTH))
+
+assert BEAT_LCM % (len(TOLERANCE_CLUSTER_LENGTH) - 1) == 0
 
 # 每个聚类的长度
-CATEGORY_LEN = BEAT_LCM // len(TOLERANCE_CLUSTER_LENGTH)
-TOLERANCE_CLUSTER_LENGTH = [l * CATEGORY_LEN for l in TOLERANCE_CLUSTER_LENGTH]
+CATEGORY_LEN = BEAT_LCM // (len(TOLERANCE_CLUSTER_LENGTH) - 1)
+TOLERANCE_CLUSTER_LENGTH = [float(l * CATEGORY_LEN)
+                            for l in TOLERANCE_CLUSTER_LENGTH]

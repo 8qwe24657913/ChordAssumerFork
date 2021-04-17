@@ -130,3 +130,6 @@ dmypy.json
 
 # database
 db_config.py
+
+# midi files
+*.mid
