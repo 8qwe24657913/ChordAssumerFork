@@ -81,8 +81,11 @@ def format_note(step_id: int) -> str:
     if step_id == -1:
         return 'R'
     from config import STEPS
-    step = STEPS[(step_id - 1) % 12]
+    step_idx = (step_id - 1) % 12
+    step = STEPS[step_idx]
     octave = (step_id - 1) // 12
+    if step_idx >= 3:
+        octave += 1
     return f'{step}{octave}/{step_id}'
 
 

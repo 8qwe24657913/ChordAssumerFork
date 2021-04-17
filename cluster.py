@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Callable, List, Union
+from typing import Callable, List, Optional
 
 import pandas as pd
 
@@ -12,7 +12,8 @@ from utils import (format_note, get_bpm, get_connection, get_music,
 class PartRepr(object):
     time_length: int
     note_count: int
-    notes: List[Union[str, List[str]]]
+    beat: str
+    notes: List[str]
 
 
 @dataclass(eq=False, frozen=True)
@@ -98,20 +99,76 @@ class Part(object):
         return Part(self.music, self.start_idx, self.length + other.length, max(self.end_time, other.end_time))
 
     def format(self) -> PartRepr:
-        formatted: List[Union[str, List[str]]] = []
-        # start_time 相等的，end_time 也应相等，且前一个音符的 end_time 等于后一个音符的 start_time
-        for _, start_time_group in self.music.iloc[self.start_idx:self.end_idx].groupby('start_time'):
-            duration_formatted: List[str] = []
-            for duration, duration_group in start_time_group.groupby('duration'):
+        @dataclass(eq=False, frozen=True, repr=False)
+        class AtomGroup(object):
+            notes: pd.DataFrame
+            end_time: int
+        # 分组，若两音符时间上有重叠，则其应被分为一组，要求分组数量尽可能多
+        grouped: List[AtomGroup] = []
+        for (start_time, end_time), group in self.music.iloc[self.start_idx:self.end_idx].groupby(['start_time', 'end_time']):
+            start_time = int(start_time)
+            end_time = int(end_time)
+            if not grouped or grouped[-1].end_time <= start_time:
+                grouped.append(AtomGroup(group, end_time))
+            else:
+                grouped[-1] = AtomGroup(
+                    pd.concat((grouped[-1].notes, group)),
+                    max(grouped[-1].end_time, end_time),
+                )
+        # 再次分组，将同一组分为多个时间线，每个时间线均可线性表示，要求分时间线数量尽可能少
+        @dataclass(eq=False, repr=False)
+        class Timeline(object):
+            notes: List[str]
+            end_time: int
+        formatted: List[str] = []
+        for group in grouped:
+            timelines: List[Timeline] = []
+            min_start_time: int = group.notes['start_time'].iat[0]  # type: ignore
+            for (start_time, duration), same_time_group in group.notes.groupby(['start_time', 'duration']):
+                start_time = int(start_time)
+                duration = int(duration)
+                # 贪心法找到 timeline.end_time 最大但不超过 start_time 的 timeline
+                greedy_timeline: Optional[Timeline] = None
+                for timeline in timelines:
+                    if timeline.end_time <= start_time and (
+                        not greedy_timeline
+                        or greedy_timeline.end_time < timeline.end_time
+                    ):
+                        greedy_timeline = timeline
+                # 找不到合适的时间轴的话就添加一个
+                if not greedy_timeline:
+                    greedy_timeline = Timeline([], min_start_time)
+                    timelines.append(greedy_timeline)
+                # 如果 timeline.end_time 小于 start_time，则应添加休止符以补齐时间轴的空位
+                if greedy_timeline.end_time < start_time:
+                    greedy_timeline.notes.append(
+                        f'{format_note(-1)} {start_time - greedy_timeline.end_time}'
+                    )
+                # 将音符组加入 greedy_timeline
                 notes = ' '.join(
-                    (format_note(note['step_id']) for _, note in duration_group.iterrows()))
+                    (
+                        format_note(note['step_id'])
+                        for _, note in same_time_group.iterrows()
+                    )
+                )
                 time_length = simplify_fraction(duration, BEAT_LCM)
-                duration_formatted.append(f'{notes} {time_length}')
-            formatted.append(duration_formatted[0] if len(
-                duration_formatted) == 1 else duration_formatted)
+                greedy_timeline.notes.append(f'{notes} {time_length}')
+                greedy_timeline.end_time = start_time + duration  # 别忘了更新 end_time
+            # 尽量避免添加括号，优化可读性
+            timeline_strings = [
+                timeline.notes[0] if len(timeline.notes) == 1
+                else f'({", ".join(timeline.notes)})'
+                for timeline in timelines
+            ]
+            formatted.append(
+                timeline_strings[0] if len(timeline_strings) == 1
+                else f'({", ".join(timeline_strings)})'
+            )
+        beats, beat_type = self.first[['beats', 'beat_type']]
         return PartRepr(
             time_length=self.end_time - self.first_start_time,
             note_count=self.end_idx - self.start_idx,
+            beat=f'{beats}/{beat_type}',
             notes=formatted,
         )
 
@@ -163,7 +220,7 @@ def cluster(music: pd.DataFrame, can_merge: Callable[[Part, Part, int, pd.DataFr
 
 
 if __name__ == '__main__':
-    MUSIC_ID = 49
+    MUSIC_ID = 438
     with get_connection() as mysql:
         music = get_music(MUSIC_ID, mysql)
         assert len(music) > 0, 'music is empty'
@@ -177,10 +234,15 @@ if __name__ == '__main__':
         # 演示一下如何获取到具体的音符信息
         # print(music.iloc[[*range(part1.start_idx, part1.start_idx + part1.length)]])
         # return True
+        beats, beat_type = part1.first[['beats', 'beat_type']]
+        beats2, beat_type2 = part2.first[['beats', 'beat_type']]
+        # 只合并节拍相同的段落
+        if (beats, beat_type) != (beats2, beat_type2):
+            return False
         part_distance = part2 - part1
         assert 0 <= part_distance <= BEAT_LCM
         merged_length = part2.last_start_time - part1.first_start_time
-        return merged_length <= TOLERANCE_CLUSTER_LENGTH[part_distance // CATEGORY_LEN]
+        return merged_length <= TOLERANCE_CLUSTER_LENGTH[part_distance // CATEGORY_LEN] * beats / beat_type
     merged_parts = cluster(music, can_merge)
     with pandas_format({
         'display.max_columns': None,
