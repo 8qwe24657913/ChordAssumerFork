@@ -142,7 +142,7 @@ class Part(object):
                 # 如果 timeline.end_time 小于 start_time，则应添加休止符以补齐时间轴的空位
                 if greedy_timeline.end_time < start_time:
                     greedy_timeline.notes.append(
-                        f'{format_note(-1)} {start_time - greedy_timeline.end_time}'
+                        f'{format_note(-1)} {simplify_fraction(start_time - greedy_timeline.end_time, BEAT_LCM)}'
                     )
                 # 将音符组加入 greedy_timeline
                 notes = ' '.join(
